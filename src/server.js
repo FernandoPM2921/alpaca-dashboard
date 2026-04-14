@@ -204,9 +204,25 @@ app.get("/api/bars/:symbol", async (req, res) => {
   }
 });
 
-// P&L del día (calculado desde órdenes)
+// P&L del día (calculado desde portfolio history)
 app.get("/api/pnl", async (req, res) => {
   try {
+    // Obtener historial de portfolio del día
+    const history = await broker("GET", "/account/portfolio/history", null, {
+      period: "1D",
+      timeframe: "1H",
+    });
+
+    // P&L del día = diferencia entre equity actual y equity al inicio del día
+    const equityValues = history.equity || [];
+    const profitLoss = history.profit_loss || [];
+    const profitLossPct = history.profit_loss_pct || [];
+
+    const todayPnL = profitLoss.length > 0
+      ? profitLoss[profitLoss.length - 1]
+      : 0;
+
+    // Obtener órdenes del día para contar wins/losses
     const today = new Date().toISOString().split("T")[0];
     const orders = await broker("GET", "/orders", null, {
       status: "filled",
@@ -214,25 +230,29 @@ app.get("/api/pnl", async (req, res) => {
       limit: 500,
     });
 
-    let totalPnL = 0;
+    // Calcular wins/losses desde órdenes de venta del día
     let wins = 0;
     let losses = 0;
-
-    // Emparejar compras y ventas
     const sells = orders.filter(o => o.side === "sell" && o.filled_avg_price);
-    const buys  = orders.filter(o => o.side === "buy"  && o.filled_avg_price);
 
+    // Para cada venta buscar la compra más reciente del mismo símbolo antes de esa venta
     sells.forEach(sell => {
-      const matchBuy = buys.find(b => b.symbol === sell.symbol);
-      if (matchBuy) {
-        const pnl = (parseFloat(sell.filled_avg_price) - parseFloat(matchBuy.filled_avg_price)) * parseInt(sell.filled_qty);
-        totalPnL += pnl;
+      const sellTime = new Date(sell.filled_at);
+      const matchBuys = orders.filter(o =>
+        o.side === "buy" &&
+        o.symbol === sell.symbol &&
+        o.filled_avg_price &&
+        new Date(o.filled_at) < sellTime
+      ).sort((a, b) => new Date(b.filled_at) - new Date(a.filled_at));
+
+      if (matchBuys.length > 0) {
+        const pnl = (parseFloat(sell.filled_avg_price) - parseFloat(matchBuys[0].filled_avg_price)) * parseInt(sell.filled_qty);
         pnl >= 0 ? wins++ : losses++;
       }
     });
 
     res.json({
-      total_pnl: totalPnL.toFixed(2),
+      total_pnl: parseFloat(todayPnL).toFixed(2),
       wins,
       losses,
       total_trades: orders.length,
