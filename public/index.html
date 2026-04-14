@@ -29,6 +29,23 @@
       --mono: 'IBM Plex Mono', monospace;
       --sans: 'IBM Plex Sans', sans-serif;
     }
+    :root.light {
+      --bg: #f4f5f7;
+      --bg2: #ffffff;
+      --bg3: #eef0f3;
+      --border: rgba(0,0,0,0.08);
+      --border2: rgba(0,0,0,0.14);
+      --text: #111316;
+      --text2: #5a6270;
+      --text3: #9aa0aa;
+      --green: #16a34a;
+      --green-dim: rgba(22,163,74,0.10);
+      --red: #dc2626;
+      --red-dim: rgba(220,38,38,0.10);
+      --blue: #2563eb;
+      --blue-dim: rgba(37,99,235,0.10);
+      --amber: #d97706;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; min-height: 100vh; }
 
@@ -172,6 +189,7 @@
         <span class="status-text" id="market-text">cargando...</span>
       </span>
       <button class="bot-btn" id="bot-btn" onclick="toggleBot()">BOT: ACTIVO</button>
+      <button class="bot-btn" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">&#9788;</button>
       <span class="last-update" id="last-update">—</span>
     </div>
   </nav>
@@ -401,6 +419,14 @@ function addCustomSymbol() {
   if (sym) { selected.add(sym); inp.value = ''; renderSymbols(); }
 }
 document.addEventListener('DOMContentLoaded', () => {
+  // Restore saved theme
+  const saved = localStorage.getItem('theme');
+  if (saved === 'light') {
+    isLight = true;
+    document.documentElement.classList.add('light');
+    document.getElementById('theme-btn').textContent = '☾';
+    document.getElementById('theme-btn').title = 'Modo oscuro';
+  }
   document.getElementById('custom-sym').addEventListener('keydown', e => { if (e.key === 'Enter') addCustomSymbol(); });
   renderSymbols();
   loadAll();
