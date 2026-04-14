@@ -380,6 +380,15 @@ let selected = new Set(['SPY']);
 let currentCat = 'etf';
 let searchVal = '';
 let botActive = true;
+let isLight = false;
+
+function toggleTheme() {
+  isLight = !isLight;
+  document.documentElement.classList.toggle('light', isLight);
+  document.getElementById('theme-btn').textContent = isLight ? 'CLARO' : 'OSCURO';
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  if (priceChart) { priceChart.destroy(); priceChart = null; loadBars(); }
+}
 let priceChart = null;
 
 // ── Symbol selector ──────────────────────────────────────────
