@@ -1,2 +1,4 @@
 ﻿[phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ["nodejs_20", "npm_10"]
+[start]
+cmd = "node src/server.js"
