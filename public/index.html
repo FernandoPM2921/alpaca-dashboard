@@ -189,7 +189,7 @@
         <span class="status-text" id="market-text">cargando...</span>
       </span>
       <button class="bot-btn" id="bot-btn" onclick="toggleBot()">BOT: ACTIVO</button>
-      <button class="bot-btn" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">&#9788;</button>
+      <button class="bot-btn" id="theme-btn" onclick="toggleTheme()">OSCURO</button>
       <span class="last-update" id="last-update">—</span>
     </div>
   </nav>
@@ -424,8 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (saved === 'light') {
     isLight = true;
     document.documentElement.classList.add('light');
-    document.getElementById('theme-btn').textContent = '☾';
-    document.getElementById('theme-btn').title = 'Modo oscuro';
+    document.getElementById('theme-btn').textContent = 'OSCURO';
   }
   document.getElementById('custom-sym').addEventListener('keydown', e => { if (e.key === 'Enter') addCustomSymbol(); });
   renderSymbols();
