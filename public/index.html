@@ -495,28 +495,64 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Bot toggle ───────────────────────────────────────────────
-function toggleBot() {
+async function toggleBot() {
   botActive = !botActive;
   const btn = document.getElementById('bot-btn');
   btn.textContent = botActive ? 'BOT: ACTIVO' : 'BOT: PAUSADO';
   btn.className = 'bot-btn ' + (botActive ? 'active' : 'paused');
+
+  // Enviar estado de pausa al servidor inmediatamente
+  try {
+    await fetch('/api/bot-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paused: !botActive }),
+    });
+  } catch(e) { console.error('Error actualizando pausa:', e); }
 }
 
 // ── Config toggles ───────────────────────────────────────────
 function toggleTP() { document.getElementById('tp-panel').className = 'sub-panel' + (document.getElementById('tp-toggle').checked ? '' : ' disabled'); }
 function toggleSL() { document.getElementById('sl-panel').className = 'sub-panel' + (document.getElementById('sl-toggle').checked ? '' : ' disabled'); }
 
-function applyConfig() {
-  const cfg = {
-    symbols: [...selected].join(', '),
-    indicator: document.getElementById('cfg-indicator').value.toUpperCase(),
+async function applyConfig() {
+  const btn = document.querySelector('.btn-primary');
+  btn.textContent = 'Aplicando...';
+  btn.disabled = true;
+
+  const body = {
+    watchlist: [...selected],
+    indicator: document.getElementById('cfg-indicator').value,
     period: document.getElementById('cfg-period-val').textContent,
     timeframe: document.getElementById('cfg-timeframe').value,
-    risk: document.getElementById('cfg-risk-val').textContent,
-    tp: document.getElementById('tp-toggle').checked ? document.getElementById('cfg-tp-val').textContent : 'desactivado',
-    sl: document.getElementById('sl-toggle').checked ? document.getElementById('cfg-sl-val').textContent : 'desactivado',
+    risk: document.getElementById('cfg-risk-val').textContent.replace('%',''),
+    tp_enabled: document.getElementById('tp-toggle').checked,
+    tp_pct: document.getElementById('cfg-tp-val').textContent.replace('%',''),
+    sl_enabled: document.getElementById('sl-toggle').checked,
+    sl_pct: document.getElementById('cfg-sl-val').textContent.replace('%',''),
+    paused: !botActive,
   };
-  alert(`Configuración guardada:\n\nSímbolos: ${cfg.symbols}\nIndicador: ${cfg.indicator} (${cfg.period})\nTimeframe: ${cfg.timeframe}\nRiesgo: ${cfg.risk}\nTake Profit: ${cfg.tp}\nStop Loss: ${cfg.sl}\n\n(Reinicia el bot para aplicar)`);
+
+  try {
+    const res = await fetch('/api/bot-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) {
+      btn.textContent = '✓ Aplicado';
+      btn.style.background = 'var(--green)';
+      setTimeout(() => {
+        btn.textContent = 'Aplicar cambios';
+        btn.style.background = '';
+        btn.disabled = false;
+      }, 2000);
+    }
+  } catch(e) {
+    btn.textContent = 'Error — reintentar';
+    btn.disabled = false;
+  }
 }
 
 // ── Data loading ─────────────────────────────────────────────
@@ -527,8 +563,49 @@ function changeChartSymbol(symbol) {
 }
 
 async function loadAll() {
-  await Promise.all([loadAccount(), loadPnL(), loadPositions(), loadOrders(), loadClock(), loadBars()]);
+  await Promise.all([loadAccount(), loadPnL(), loadPositions(), loadOrders(), loadClock(), loadBars(), loadBotConfig()]);
   document.getElementById('last-update').textContent = new Date().toLocaleTimeString('es-MX');
+}
+
+async function loadBotConfig() {
+  try {
+    const cfg = await fetch('/api/bot-config').then(r => r.json());
+
+    // Sync UI with current config
+    if (cfg.indicator) document.getElementById('cfg-indicator').value = cfg.indicator.toLowerCase();
+    if (cfg.period) {
+      document.getElementById('cfg-period').value = cfg.period;
+      document.getElementById('cfg-period-val').textContent = cfg.period;
+    }
+    if (cfg.timeframe) document.getElementById('cfg-timeframe').value = cfg.timeframe;
+    if (cfg.risk) {
+      document.getElementById('cfg-risk').value = cfg.risk;
+      document.getElementById('cfg-risk-val').textContent = cfg.risk + '%';
+    }
+    if (cfg.tp_pct) {
+      document.getElementById('cfg-tp').value = cfg.tp_pct;
+      document.getElementById('cfg-tp-val').textContent = parseFloat(cfg.tp_pct).toFixed(1) + '%';
+    }
+    if (cfg.sl_pct) {
+      document.getElementById('cfg-sl').value = cfg.sl_pct;
+      document.getElementById('cfg-sl-val').textContent = parseFloat(cfg.sl_pct).toFixed(1) + '%';
+    }
+    document.getElementById('tp-toggle').checked = cfg.tp_enabled;
+    document.getElementById('sl-toggle').checked = cfg.sl_enabled;
+    toggleTP(); toggleSL();
+
+    // Sync watchlist selection
+    if (cfg.watchlist?.length) {
+      selected = new Set(cfg.watchlist);
+      renderSymbols();
+    }
+
+    // Sync bot state
+    botActive = !cfg.paused;
+    const btn = document.getElementById('bot-btn');
+    btn.textContent = botActive ? 'BOT: ACTIVO' : 'BOT: PAUSADO';
+    btn.className = 'bot-btn ' + (botActive ? 'active' : 'paused');
+  } catch(e) { console.error('Error cargando config:', e); }
 }
 
 async function loadAccount() {

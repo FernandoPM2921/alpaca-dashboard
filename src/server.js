@@ -287,6 +287,43 @@ app.get("/api/pnl", async (req, res) => {
   }
 });
 
+// ── Bot Config Storage ────────────────────────────────────────
+let botConfig = {
+  watchlist: ["AAPL","AMZN","GOOG","META","MSFT","AMD","NVDA","BAC","JPM","CAT","GE","VLO","XOM","CVS","TJX","TSLA","COST","WMT","SPY","QQQ"],
+  indicator: "SMA",
+  period: 14,
+  timeframe: "5Min",
+  risk: 5,
+  tp_enabled: false,
+  tp_pct: 2,
+  sl_enabled: false,
+  sl_pct: 1,
+  paused: false,
+};
+
+// Get bot config (used by the bot to read settings)
+app.get("/api/bot-config", (req, res) => {
+  res.json(botConfig);
+});
+
+// Update bot config (called from dashboard)
+app.post("/api/bot-config", (req, res) => {
+  const update = req.body;
+  if (update.watchlist)              botConfig.watchlist    = update.watchlist;
+  if (update.indicator)              botConfig.indicator    = update.indicator;
+  if (update.period)                 botConfig.period       = parseInt(update.period);
+  if (update.timeframe)              botConfig.timeframe    = update.timeframe;
+  if (update.risk !== undefined)     botConfig.risk         = parseFloat(update.risk);
+  if (update.tp_enabled !== undefined) botConfig.tp_enabled = update.tp_enabled;
+  if (update.tp_pct !== undefined)   botConfig.tp_pct       = parseFloat(update.tp_pct);
+  if (update.sl_enabled !== undefined) botConfig.sl_enabled = update.sl_enabled;
+  if (update.sl_pct !== undefined)   botConfig.sl_pct       = parseFloat(update.sl_pct);
+  if (update.paused !== undefined)   botConfig.paused       = update.paused;
+
+  console.log("⚙️  Config actualizada:", JSON.stringify(botConfig));
+  res.json({ success: true, config: botConfig });
+});
+
 // ── Start server ──────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 Alpaca Dashboard corriendo en http://localhost:${PORT}`);
