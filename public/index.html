@@ -212,17 +212,43 @@
         <div class="metric-val" id="m-pnl"><span class="spin"></span></div>
         <div class="metric-sub" id="m-trades">— trades</div>
       </div>
-      <div class="card">
+      <div class="card" style="cursor:pointer;" onclick="toggleWLDetail()" title="Ver detalle">
         <div class="card-title">Wins / Losses</div>
         <div class="metric-val" id="m-wl"><span class="spin"></span></div>
         <div class="metric-sub" id="m-winrate">—</div>
+        <div id="wl-detail" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:8px;max-height:140px;overflow-y:auto;">
+        </div>
       </div>
     </div>
 
     <!-- Price chart + Positions -->
     <div class="grid-2">
       <div class="card">
-        <div class="card-title">Precio en tiempo real</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="card-title" style="margin-bottom:0;">Precio en tiempo real</div>
+          <select id="chart-symbol-select" onchange="changeChartSymbol(this.value)" style="width:auto;padding:4px 8px;font-size:12px;">
+            <option value="AAPL">AAPL</option>
+            <option value="AMZN">AMZN</option>
+            <option value="GOOG">GOOG</option>
+            <option value="META">META</option>
+            <option value="MSFT">MSFT</option>
+            <option value="AMD">AMD</option>
+            <option value="NVDA">NVDA</option>
+            <option value="BAC">BAC</option>
+            <option value="JPM">JPM</option>
+            <option value="CAT">CAT</option>
+            <option value="GE">GE</option>
+            <option value="VLO">VLO</option>
+            <option value="XOM">XOM</option>
+            <option value="CVS">CVS</option>
+            <option value="TJX">TJX</option>
+            <option value="TSLA">TSLA</option>
+            <option value="COST">COST</option>
+            <option value="WMT">WMT</option>
+            <option value="SPY" selected>SPY</option>
+            <option value="QQQ">QQQ</option>
+          </select>
+        </div>
         <div class="price-main">
           <span class="price-sym" id="chart-symbol">SPY</span>
           <span class="price-val" id="price-val"><span class="spin"></span></span>
@@ -246,7 +272,34 @@
 
     <!-- Trades history -->
     <div class="card" style="margin-bottom:20px;">
-      <div class="card-title">Historial de trades</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <div class="card-title" style="margin-bottom:0;">Historial de trades</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="trades-filter" onchange="filterTrades(this.value)" style="width:auto;padding:4px 8px;font-size:12px;">
+            <option value="ALL">Todos los símbolos</option>
+            <option value="AAPL">AAPL</option>
+            <option value="AMZN">AMZN</option>
+            <option value="GOOG">GOOG</option>
+            <option value="META">META</option>
+            <option value="MSFT">MSFT</option>
+            <option value="AMD">AMD</option>
+            <option value="NVDA">NVDA</option>
+            <option value="BAC">BAC</option>
+            <option value="JPM">JPM</option>
+            <option value="CAT">CAT</option>
+            <option value="GE">GE</option>
+            <option value="VLO">VLO</option>
+            <option value="XOM">XOM</option>
+            <option value="CVS">CVS</option>
+            <option value="TJX">TJX</option>
+            <option value="TSLA">TSLA</option>
+            <option value="COST">COST</option>
+            <option value="WMT">WMT</option>
+            <option value="SPY">SPY</option>
+            <option value="QQQ">QQQ</option>
+          </select>
+        </div>
+      </div>
       <div style="overflow-x:auto;">
         <table>
           <thead>
@@ -467,6 +520,12 @@ function applyConfig() {
 }
 
 // ── Data loading ─────────────────────────────────────────────
+function changeChartSymbol(symbol) {
+  document.getElementById('chart-symbol').textContent = symbol;
+  if (priceChart) { priceChart.destroy(); priceChart = null; }
+  loadBars();
+}
+
 async function loadAll() {
   await Promise.all([loadAccount(), loadPnL(), loadPositions(), loadOrders(), loadClock(), loadBars()]);
   document.getElementById('last-update').textContent = new Date().toLocaleTimeString('es-MX');
@@ -480,6 +539,8 @@ async function loadAccount() {
   } catch(e) { console.error('account', e); }
 }
 
+let wlDetailData = [];
+
 async function loadPnL() {
   try {
     const d = await fetch('/api/pnl').then(r => r.json());
@@ -492,7 +553,32 @@ async function loadPnL() {
     wl.textContent = d.wins + ' / ' + d.losses;
     const total = d.wins + d.losses;
     document.getElementById('m-winrate').textContent = total > 0 ? 'win rate ' + Math.round(d.wins/total*100) + '%' : '—';
+
+    // Build win/loss detail from orders
+    wlDetailData = d.trade_details || [];
+    renderWLDetail();
   } catch(e) { console.error('pnl', e); }
+}
+
+function renderWLDetail() {
+  const detail = document.getElementById('wl-detail');
+  if (!wlDetailData.length) {
+    detail.innerHTML = '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);">Sin detalle disponible</div>';
+    return;
+  }
+  detail.innerHTML = wlDetailData.map(t => {
+    const color = t.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+    const icon = t.pnl >= 0 ? '▲' : '▼';
+    return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:var(--mono);">
+      <span style="color:var(--text2);">${t.symbol}</span>
+      <span style="color:${color};">${icon} ${t.pnl >= 0 ? '+' : ''}$${parseFloat(t.pnl).toFixed(2)}</span>
+    </div>`;
+  }).join('');
+}
+
+function toggleWLDetail() {
+  const detail = document.getElementById('wl-detail');
+  detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
 }
 
 async function loadPositions() {
@@ -530,23 +616,30 @@ async function closePosition(symbol) {
   } catch(e) { alert('Error cerrando posición'); }
 }
 
+let allOrders = [];
+
 async function loadOrders() {
   try {
-    const orders = await fetch('/api/orders?status=all&limit=20').then(r => r.json());
-    const tbody = document.getElementById('trades-body');
-    if (!orders.length) { tbody.innerHTML = '<tr><td colspan="6" class="no-data">Sin trades recientes</td></tr>'; return; }
-    tbody.innerHTML = orders.slice(0, 15).map(o => {
-      const time = o.filled_at ? new Date(o.filled_at).toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit'}) : '—';
-      return `<tr>
-        <td>${time}</td>
-        <td>${o.symbol}</td>
-        <td><span class="badge ${o.side}">${o.side === 'buy' ? 'Compra' : 'Venta'}</span></td>
-        <td>${o.filled_qty || o.qty}</td>
-        <td>${o.filled_avg_price ? '$'+o.filled_avg_price : '—'}</td>
-        <td>${o.status}</td>
-      </tr>`;
-    }).join('');
+    allOrders = await fetch('/api/orders?status=all&limit=100').then(r => r.json());
+    filterTrades(document.getElementById('trades-filter')?.value || 'ALL');
   } catch(e) { console.error('orders', e); }
+}
+
+function filterTrades(symbol) {
+  const tbody = document.getElementById('trades-body');
+  const filtered = symbol === 'ALL' ? allOrders : allOrders.filter(o => o.symbol === symbol);
+  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6" class="no-data">Sin trades</td></tr>'; return; }
+  tbody.innerHTML = filtered.slice(0, 50).map(o => {
+    const time = o.filled_at ? new Date(o.filled_at).toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit'}) : '—';
+    return `<tr>
+      <td>${time}</td>
+      <td>${o.symbol}</td>
+      <td><span class="badge ${o.side}">${o.side === 'buy' ? 'Compra' : 'Venta'}</span></td>
+      <td>${o.filled_qty || o.qty}</td>
+      <td>${o.filled_avg_price ? '$'+o.filled_avg_price : '—'}</td>
+      <td>${o.status}</td>
+    </tr>`;
+  }).join('');
 }
 
 async function loadClock() {
@@ -567,7 +660,7 @@ async function loadClock() {
 
 async function loadBars() {
   try {
-    const symbol = [...selected][0];
+    const symbol = document.getElementById('chart-symbol-select')?.value || 'SPY';
     const tf = document.getElementById('cfg-timeframe')?.value || '5Min';
     const period = document.getElementById('cfg-period-val')?.textContent || '14';
     const data = await fetch(`/api/bars/${symbol}?timeframe=${tf}&period=${period}`).then(r => r.json());

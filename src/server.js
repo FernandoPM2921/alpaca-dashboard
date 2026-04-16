@@ -251,11 +251,36 @@ app.get("/api/pnl", async (req, res) => {
       }
     });
 
+    // Build trade details for win/loss breakdown
+    const tradeDetails = [];
+    sells.forEach(sell => {
+      const sellTime = new Date(sell.filled_at);
+      const matchBuys = orders.filter(o =>
+        o.side === "buy" &&
+        o.symbol === sell.symbol &&
+        o.filled_avg_price &&
+        new Date(o.filled_at) < sellTime
+      ).sort((a, b) => new Date(b.filled_at) - new Date(a.filled_at));
+
+      if (matchBuys.length > 0) {
+        const pnl = (parseFloat(sell.filled_avg_price) - parseFloat(matchBuys[0].filled_avg_price)) * parseInt(sell.filled_qty);
+        tradeDetails.push({
+          symbol: sell.symbol,
+          pnl: pnl.toFixed(2),
+          entry: parseFloat(matchBuys[0].filled_avg_price).toFixed(2),
+          exit: parseFloat(sell.filled_avg_price).toFixed(2),
+          qty: sell.filled_qty,
+          time: sell.filled_at,
+        });
+      }
+    });
+
     res.json({
       total_pnl: parseFloat(todayPnL).toFixed(2),
       wins,
       losses,
       total_trades: orders.length,
+      trade_details: tradeDetails.sort((a, b) => new Date(b.time) - new Date(a.time)),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
