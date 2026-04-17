@@ -320,6 +320,49 @@
     </div>
 
     <!-- Config -->
+    <!-- Manual Orders -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-title" style="margin-bottom:14px;">Órdenes manuales</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;">
+        <div class="cfg-item">
+          <label class="cfg-label">Símbolo</label>
+          <input type="text" id="ord-symbol" placeholder="SPY" style="text-transform:uppercase;">
+        </div>
+        <div class="cfg-item">
+          <label class="cfg-label">Lado</label>
+          <select id="ord-side">
+            <option value="buy">Compra</option>
+            <option value="sell">Venta / Corto</option>
+          </select>
+        </div>
+        <div class="cfg-item">
+          <label class="cfg-label">Tipo</label>
+          <select id="ord-type" onchange="updateOrderFields()">
+            <option value="market">Mercado</option>
+            <option value="limit">Limitada</option>
+            <option value="stop">Stop</option>
+            <option value="stop_limit">Stop Limit</option>
+          </select>
+        </div>
+        <div class="cfg-item">
+          <label class="cfg-label">Cantidad (acciones)</label>
+          <input type="text" id="ord-qty" placeholder="10">
+        </div>
+        <div class="cfg-item" id="ord-limit-wrap" style="display:none;">
+          <label class="cfg-label">Precio límite</label>
+          <input type="text" id="ord-limit" placeholder="0.00">
+        </div>
+        <div class="cfg-item" id="ord-stop-wrap" style="display:none;">
+          <label class="cfg-label">Precio stop</label>
+          <input type="text" id="ord-stop" placeholder="0.00">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-primary" onclick="placeManualOrder()">Enviar orden</button>
+        <span id="ord-status" style="font-size:12px;font-family:var(--mono);color:var(--text2);"></span>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-title" style="margin-bottom:14px;">Configuración de estrategia</div>
       <div class="config-grid">
@@ -342,6 +385,15 @@
               <button onclick="addCustomSymbol()">Agregar</button>
             </div>
             <div class="sym-selected" id="selected-display"></div>
+          </div>
+        </div>
+
+        <!-- Long/Short per symbol -->
+        <div class="cfg-item full">
+          <label class="cfg-label">Estrategia largo/corto por símbolo</label>
+          <div style="border:1px solid var(--border2);border-radius:var(--radius);padding:10px;background:var(--bg3);">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-family:var(--mono);">Activa para que el bot vaya corto cuando vende en lugar de quedarse en cash</div>
+            <div id="ls-toggles" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
           </div>
         </div>
 
@@ -451,6 +503,7 @@ function renderSymbols() {
     `<div class="sym-chip ${selected.has(s)?'selected':''}" onclick="toggleSym('${s}')">${selected.has(s)?'✓ ':''}${s}</div>`
   ).join('');
   renderSelectedTags();
+  renderLSToggles();
 }
 
 function renderSelectedTags() {
@@ -515,6 +568,74 @@ async function toggleBot() {
 function toggleTP() { document.getElementById('tp-panel').className = 'sub-panel' + (document.getElementById('tp-toggle').checked ? '' : ' disabled'); }
 function toggleSL() { document.getElementById('sl-panel').className = 'sub-panel' + (document.getElementById('sl-toggle').checked ? '' : ' disabled'); }
 
+// ── Manual Orders ────────────────────────────────────────────
+function updateOrderFields() {
+  const type = document.getElementById('ord-type').value;
+  document.getElementById('ord-limit-wrap').style.display = (type === 'limit' || type === 'stop_limit') ? '' : 'none';
+  document.getElementById('ord-stop-wrap').style.display  = (type === 'stop'  || type === 'stop_limit') ? '' : 'none';
+}
+
+async function placeManualOrder() {
+  const symbol = document.getElementById('ord-symbol').value.trim().toUpperCase();
+  const side   = document.getElementById('ord-side').value;
+  const type   = document.getElementById('ord-type').value;
+  const qty    = document.getElementById('ord-qty').value.trim();
+  const limit  = document.getElementById('ord-limit').value.trim();
+  const stop   = document.getElementById('ord-stop').value.trim();
+  const status = document.getElementById('ord-status');
+
+  if (!symbol || !qty) { status.textContent = '⚠️ Ingresa símbolo y cantidad'; return; }
+
+  const body = { symbol, side, type, qty };
+  if (limit) body.limit_price = limit;
+  if (stop)  body.stop_price  = stop;
+
+  status.textContent = 'Enviando...';
+  try {
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) {
+      status.textContent = `✓ Orden enviada — ID: ${data.order.id?.slice(0,8)}`;
+      status.style.color = 'var(--green)';
+      setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 4000);
+      loadOrders();
+    } else {
+      status.textContent = `❌ ${data.error}`;
+      status.style.color = 'var(--red)';
+    }
+  } catch(e) {
+    status.textContent = '❌ Error de conexión';
+    status.style.color = 'var(--red)';
+  }
+}
+
+// ── Long/Short toggles per symbol ────────────────────────────
+let symbolConfig = {};
+
+function renderLSToggles() {
+  const container = document.getElementById('ls-toggles');
+  const watchlist = [...selected];
+  container.innerHTML = watchlist.map(sym => {
+    const enabled = symbolConfig[sym]?.long_short ?? false;
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);">
+      <span style="font-size:12px;font-family:var(--mono);color:var(--text);">${sym}</span>
+      <label class="toggle" style="margin:0;">
+        <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleLS('${sym}', this.checked)">
+        <span class="tog-slider"></span>
+      </label>
+    </div>`;
+  }).join('');
+}
+
+function toggleLS(symbol, enabled) {
+  if (!symbolConfig[symbol]) symbolConfig[symbol] = {};
+  symbolConfig[symbol].long_short = enabled;
+}
+
 async function applyConfig() {
   const btn = document.querySelector('.btn-primary');
   btn.textContent = 'Aplicando...';
@@ -531,6 +652,7 @@ async function applyConfig() {
     sl_enabled: document.getElementById('sl-toggle').checked,
     sl_pct: document.getElementById('cfg-sl-val').textContent.replace('%',''),
     paused: !botActive,
+    symbol_config: symbolConfig,
   };
 
   try {

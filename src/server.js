@@ -299,6 +299,7 @@ let botConfig = {
   sl_enabled: false,
   sl_pct: 1,
   paused: false,
+  symbol_config: {}, // { "SPY": { long_short: true }, ... }
 };
 
 // Get bot config (used by the bot to read settings)
@@ -318,10 +319,36 @@ app.post("/api/bot-config", (req, res) => {
   if (update.tp_pct !== undefined)   botConfig.tp_pct       = parseFloat(update.tp_pct);
   if (update.sl_enabled !== undefined) botConfig.sl_enabled = update.sl_enabled;
   if (update.sl_pct !== undefined)   botConfig.sl_pct       = parseFloat(update.sl_pct);
-  if (update.paused !== undefined)   botConfig.paused       = update.paused;
+  if (update.paused !== undefined)   botConfig.paused        = update.paused;
+  if (update.symbol_config)          botConfig.symbol_config  = update.symbol_config;
 
   console.log("⚙️  Config actualizada:", JSON.stringify(botConfig));
   res.json({ success: true, config: botConfig });
+});
+
+// ── Manual Orders ──────────────────────────────────────────────
+app.post("/api/orders", async (req, res) => {
+  try {
+    const { symbol, side, type, qty, notional, limit_price, stop_price } = req.body;
+    if (!symbol || !side || !type) return res.status(400).json({ error: "Faltan parámetros: symbol, side, type" });
+
+    const order = {
+      symbol: symbol.toUpperCase(),
+      side,
+      type,
+      time_in_force: "day",
+    };
+
+    if (qty)          order.qty         = String(qty);
+    if (notional)     order.notional    = String(notional);
+    if (limit_price)  order.limit_price = String(limit_price);
+    if (stop_price)   order.stop_price  = String(stop_price);
+
+    const result = await broker("POST", "/orders", order);
+    res.json({ success: true, order: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Start server ──────────────────────────────────────────────
