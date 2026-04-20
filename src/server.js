@@ -86,6 +86,16 @@ app.delete("/api/positions/:symbol", async (req, res) => {
   }
 });
 
+// Close ALL positions
+app.delete("/api/positions", async (req, res) => {
+  try {
+    await broker("DELETE", "/positions");
+    res.json({ success: true, message: "Todas las posiciones cerradas" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Orders history
 app.get("/api/orders", async (req, res) => {
   try {
