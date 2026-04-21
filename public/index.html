@@ -510,6 +510,136 @@
       </div>
     </div>
 
+    <!-- Backtesting -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-title" style="margin-bottom:16px;">Backtesting</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
+
+        <div class="cfg-item">
+          <label class="cfg-label">Símbolo</label>
+          <input type="text" id="bt-symbol" placeholder="SPY" style="text-transform:uppercase;">
+        </div>
+        <div class="cfg-item">
+          <label class="cfg-label">Período histórico</label>
+          <select id="bt-years">
+            <option value="1">1 año</option>
+            <option value="2">2 años</option>
+            <option value="3" selected>3 años</option>
+            <option value="5">5 años</option>
+          </select>
+        </div>
+        <div class="cfg-item">
+          <label class="cfg-label">Indicador</label>
+          <select id="bt-indicator" onchange="onBtIndicatorChange()">
+            <option value="SMA">SMA</option>
+            <option value="EMA">EMA</option>
+            <option value="CROSS">Cruce de promedios</option>
+          </select>
+        </div>
+        <div class="cfg-item" id="bt-period-wrap">
+          <label class="cfg-label">Período</label>
+          <div class="slider-row">
+            <input type="range" min="1" max="200" value="14" step="1" id="bt-period" oninput="document.getElementById('bt-period-val').textContent=this.value">
+            <span class="slider-val" id="bt-period-val">14</span>
+          </div>
+        </div>
+        <div class="cfg-item">
+          <label class="cfg-label">Capital inicial ($)</label>
+          <input type="text" id="bt-capital" value="10000">
+        </div>
+        <div class="cfg-item">
+          <label class="cfg-label">Riesgo por trade (%)</label>
+          <div class="slider-row">
+            <input type="range" min="1" max="20" value="5" step="1" id="bt-risk" oninput="document.getElementById('bt-risk-val').textContent=this.value+'%'">
+            <span class="slider-val" id="bt-risk-val">5%</span>
+          </div>
+        </div>
+        <div class="cfg-item" style="justify-content:flex-end;">
+          <label class="cfg-label">Largo / Corto</label>
+          <label class="toggle" style="margin-top:4px;">
+            <input type="checkbox" id="bt-longshort">
+            <span class="tog-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Crossover panel for backtest -->
+      <div id="bt-cross-panel" style="display:none;border:1px solid var(--border2);border-radius:var(--radius);padding:12px;background:var(--bg3);margin-bottom:16px;display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <div class="cfg-label" style="margin-bottom:6px;">Promedio rápido</div>
+            <select id="bt-fast-type" style="margin-bottom:8px;"><option value="SMA">SMA</option><option value="EMA">EMA</option></select>
+            <div class="cfg-label" style="margin-bottom:4px;">Período rápido</div>
+            <div class="slider-row">
+              <input type="range" min="1" max="200" value="9" step="1" id="bt-fast-period" oninput="document.getElementById('bt-fast-val').textContent=this.value">
+              <span class="slider-val" id="bt-fast-val">9</span>
+            </div>
+          </div>
+          <div>
+            <div class="cfg-label" style="margin-bottom:6px;">Promedio lento</div>
+            <select id="bt-slow-type" style="margin-bottom:8px;"><option value="SMA">SMA</option><option value="EMA">EMA</option></select>
+            <div class="cfg-label" style="margin-bottom:4px;">Período lento</div>
+            <div class="slider-row">
+              <input type="range" min="1" max="200" value="21" step="1" id="bt-slow-period" oninput="document.getElementById('bt-slow-val').textContent=this.value">
+              <span class="slider-val" id="bt-slow-val">21</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top:0;margin-bottom:16px;">
+        <button class="btn btn-primary" onclick="runBacktest()" id="bt-run-btn">▶ Ejecutar backtest</button>
+        <span id="bt-status" style="font-size:12px;font-family:var(--mono);color:var(--text2);"></span>
+      </div>
+
+      <!-- Results -->
+      <div id="bt-results" style="display:none;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
+          <div class="card" style="padding:12px 14px;">
+            <div class="card-title">P&L Total</div>
+            <div class="metric-val" id="bt-r-pnl" style="font-size:20px;">—</div>
+            <div class="metric-sub" id="bt-r-pnl-pct">—</div>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <div class="card-title">Win Rate</div>
+            <div class="metric-val" id="bt-r-wr" style="font-size:20px;">—</div>
+            <div class="metric-sub" id="bt-r-wl">—</div>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <div class="card-title">Max Drawdown</div>
+            <div class="metric-val" id="bt-r-dd" style="font-size:20px;">—</div>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <div class="card-title">Capital final</div>
+            <div class="metric-val" id="bt-r-cap" style="font-size:20px;">—</div>
+            <div class="metric-sub" id="bt-r-trades">—</div>
+          </div>
+        </div>
+
+        <!-- Equity curve -->
+        <div style="position:relative;width:100%;height:220px;margin-bottom:16px;">
+          <canvas id="btChart"></canvas>
+        </div>
+
+        <!-- Trades table -->
+        <div style="overflow-x:auto;overflow-y:auto;max-height:300px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Lado</th>
+                <th>Entrada</th>
+                <th>Salida</th>
+                <th>Qty</th>
+                <th>P&L</th>
+              </tr>
+            </thead>
+            <tbody id="bt-trades-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -982,6 +1112,135 @@ async function loadClock() {
       text.textContent = 'Cerrado · abre ' + next;
     }
   } catch(e) { console.error('clock', e); }
+}
+
+// ── Backtesting ──────────────────────────────────────────────
+let btChart = null;
+
+function onBtIndicatorChange() {
+  const val = document.getElementById('bt-indicator').value;
+  const crossPanel = document.getElementById('bt-cross-panel');
+  const periodWrap = document.getElementById('bt-period-wrap');
+  if (val === 'CROSS') {
+    crossPanel.style.display = 'block';
+    periodWrap.style.opacity = '0.35';
+    periodWrap.style.pointerEvents = 'none';
+  } else {
+    crossPanel.style.display = 'none';
+    periodWrap.style.opacity = '';
+    periodWrap.style.pointerEvents = '';
+  }
+}
+
+async function runBacktest() {
+  const symbol = document.getElementById('bt-symbol').value.trim().toUpperCase();
+  if (!symbol) { document.getElementById('bt-status').textContent = '⚠️ Ingresa un símbolo'; return; }
+
+  const btn = document.getElementById('bt-run-btn');
+  const status = document.getElementById('bt-status');
+  btn.disabled = true;
+  btn.textContent = 'Calculando...';
+  status.textContent = '';
+  document.getElementById('bt-results').style.display = 'none';
+
+  const indicator = document.getElementById('bt-indicator').value;
+  const body = {
+    symbol,
+    period_years: parseInt(document.getElementById('bt-years').value),
+    indicator,
+    period: parseInt(document.getElementById('bt-period-val').textContent),
+    long_short: document.getElementById('bt-longshort').checked,
+    initial_capital: parseFloat(document.getElementById('bt-capital').value) || 10000,
+    risk_pct: parseInt(document.getElementById('bt-risk-val').textContent),
+    cross_fast_type: document.getElementById('bt-fast-type').value,
+    cross_fast_period: parseInt(document.getElementById('bt-fast-val').textContent),
+    cross_slow_type: document.getElementById('bt-slow-type').value,
+    cross_slow_period: parseInt(document.getElementById('bt-slow-val').textContent),
+  };
+
+  try {
+    const res = await fetch('/api/backtest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await res.json();
+    if (!res.ok) { status.textContent = '❌ ' + d.error; btn.disabled = false; btn.textContent = '▶ Ejecutar backtest'; return; }
+
+    // Show results
+    document.getElementById('bt-results').style.display = 'block';
+
+    const pnlEl = document.getElementById('bt-r-pnl');
+    pnlEl.textContent = (d.total_pnl >= 0 ? '+' : '') + '$' + Math.abs(d.total_pnl).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    pnlEl.className = 'metric-val ' + (d.total_pnl >= 0 ? 'pos' : 'neg');
+    document.getElementById('bt-r-pnl-pct').textContent = (d.total_pnl_pct >= 0 ? '+' : '') + d.total_pnl_pct + '%';
+
+    const wrEl = document.getElementById('bt-r-wr');
+    wrEl.textContent = d.win_rate + '%';
+    wrEl.className = 'metric-val ' + (d.win_rate >= 50 ? 'pos' : 'neg');
+    document.getElementById('bt-r-wl').textContent = d.wins + ' wins · ' + d.losses + ' losses';
+
+    const ddEl = document.getElementById('bt-r-dd');
+    ddEl.textContent = '-' + d.max_drawdown + '%';
+    ddEl.className = 'metric-val ' + (d.max_drawdown > 20 ? 'neg' : d.max_drawdown > 10 ? '' : 'pos');
+
+    document.getElementById('bt-r-cap').textContent = '$' + d.final_capital.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('bt-r-trades').textContent = d.trades_total + ' trades · ' + d.bars_total + ' días';
+
+    // Equity curve chart
+    const labels = d.equity.map(p => p.t);
+    const values = d.equity.map(p => p.v);
+    const color = d.total_pnl >= 0 ? '#22c55e' : '#ef4444';
+
+    if (btChart) { btChart.destroy(); btChart = null; }
+    btChart = new Chart(document.getElementById('btChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Equity',
+          data: values,
+          borderColor: color,
+          backgroundColor: color.replace(')', ',0.08)').replace('rgb', 'rgba'),
+          borderWidth: 2, pointRadius: 0, fill: true, tension: 0.2,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1a1e22', titleColor: '#8b9299', bodyColor: '#e8eaed', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, callbacks: { label: ctx => '$' + ctx.raw.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) } } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { font: { size: 10, family: "'IBM Plex Mono'" }, color: '#4d5560', maxTicksLimit: 10 } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { font: { size: 10, family: "'IBM Plex Mono'" }, color: '#4d5560', callback: v => '$' + v.toLocaleString('en-US') } }
+        }
+      }
+    });
+
+    // Trades table
+    const tbody = document.getElementById('bt-trades-body');
+    if (!d.trades.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">Sin trades</td></tr>';
+    } else {
+      tbody.innerHTML = d.trades.slice().reverse().map(t => {
+        const color = t.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+        return `<tr>
+          <td>${t.date}</td>
+          <td><span class="badge ${t.side === 'long' ? 'buy' : 'sell'}">${t.side === 'long' ? 'Largo' : 'Corto'}</span></td>
+          <td>$${parseFloat(t.entry).toFixed(2)}</td>
+          <td>$${parseFloat(t.exit).toFixed(2)}</td>
+          <td>${t.qty}</td>
+          <td style="color:${color};font-weight:500;">${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    status.textContent = `✓ ${symbol} · ${body.period_years} año(s)`;
+    status.style.color = 'var(--green)';
+  } catch(e) {
+    status.textContent = '❌ Error de conexión';
+    status.style.color = 'var(--red)';
+  }
+  btn.disabled = false;
+  btn.textContent = '▶ Ejecutar backtest';
 }
 
 async function loadBars() {

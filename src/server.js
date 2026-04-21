@@ -369,6 +369,160 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
+// ── Backtesting ───────────────────────────────────────────────
+app.post("/api/backtest", async (req, res) => {
+  try {
+    const {
+      symbol, period_years = 1,
+      indicator = "SMA", period = 14,
+      cross_fast_type = "SMA", cross_fast_period = 9,
+      cross_slow_type = "SMA", cross_slow_period = 21,
+      long_short = false,
+      initial_capital = 10000,
+      risk_pct = 5,
+    } = req.body;
+
+    if (!symbol) return res.status(400).json({ error: "Falta símbolo" });
+
+    // Fetch historical data from Yahoo Finance
+    const endTs   = Math.floor(Date.now() / 1000);
+    const startTs = endTs - period_years * 365 * 24 * 3600;
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}?interval=1d&period1=${startTs}&period2=${endTs}`;
+
+    const yahooRes = await axios.get(yahooUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+
+    const chart = yahooRes.data?.chart?.result?.[0];
+    if (!chart) return res.status(400).json({ error: "No se encontraron datos para ese símbolo" });
+
+    const timestamps = chart.timestamp;
+    const closes     = chart.indicators.quote[0].close;
+
+    // Filter out null values
+    const bars = timestamps
+      .map((t, i) => ({ t: new Date(t * 1000).toISOString().split("T")[0], c: closes[i] }))
+      .filter(b => b.c != null);
+
+    if (bars.length < 30) return res.status(400).json({ error: "Datos insuficientes" });
+
+    // ── Indicator calculations ──────────────────────────────
+    function calcSMA(arr, p) {
+      if (arr.length < p) return null;
+      return arr.slice(-p).reduce((a, b) => a + b, 0) / p;
+    }
+    function calcEMA(arr, p) {
+      if (arr.length < p) return null;
+      const k = 2 / (p + 1);
+      let ema = arr.slice(0, p).reduce((a, b) => a + b, 0) / p;
+      for (let i = p; i < arr.length; i++) ema = arr[i] * k + ema * (1 - k);
+      return ema;
+    }
+
+    // ── Simulate strategy ───────────────────────────────────
+    let capital    = initial_capital;
+    let position   = null; // { side: 'long'|'short', entry, qty, entryDate }
+    const trades   = [];
+    const equity   = [];
+
+    for (let i = 1; i < bars.length; i++) {
+      const closes_so_far = bars.slice(0, i + 1).map(b => b.c);
+      const price = bars[i].c;
+      let signal = null; // true = bullish, false = bearish
+
+      if (indicator.toUpperCase() === "CROSS") {
+        const fastFn = cross_fast_type.toUpperCase() === "EMA" ? calcEMA : calcSMA;
+        const slowFn = cross_slow_type.toUpperCase() === "EMA" ? calcEMA : calcSMA;
+        const fast = fastFn(closes_so_far, cross_fast_period);
+        const slow = slowFn(closes_so_far, cross_slow_period);
+        if (fast != null && slow != null) signal = fast > slow;
+      } else if (indicator.toUpperCase() === "EMA") {
+        const ema = calcEMA(closes_so_far, period);
+        if (ema != null) signal = price > ema;
+      } else {
+        const sma = calcSMA(closes_so_far, period);
+        if (sma != null) signal = price > sma;
+      }
+
+      if (signal === null) { equity.push({ t: bars[i].t, v: capital }); continue; }
+
+      const riskAmount = capital * (risk_pct / 100);
+      const qty = Math.floor(riskAmount / price);
+
+      if (signal && !position) {
+        // Open long
+        if (qty >= 1) {
+          position = { side: "long", entry: price, qty, entryDate: bars[i].t };
+        }
+      } else if (!signal && position?.side === "long") {
+        // Close long
+        const pnl = (price - position.entry) * position.qty;
+        capital += pnl;
+        trades.push({ date: bars[i].t, side: "long", entry: position.entry, exit: price, qty: position.qty, pnl: parseFloat(pnl.toFixed(2)) });
+        position = null;
+
+        if (long_short && qty >= 1) {
+          position = { side: "short", entry: price, qty, entryDate: bars[i].t };
+        }
+      } else if (signal && position?.side === "short") {
+        // Close short
+        const pnl = (position.entry - price) * position.qty;
+        capital += pnl;
+        trades.push({ date: bars[i].t, side: "short", entry: position.entry, exit: price, qty: position.qty, pnl: parseFloat(pnl.toFixed(2)) });
+        position = null;
+
+        if (qty >= 1) {
+          position = { side: "long", entry: price, qty, entryDate: bars[i].t };
+        }
+      }
+
+      equity.push({ t: bars[i].t, v: parseFloat(capital.toFixed(2)) });
+    }
+
+    // Close any open position at last price
+    if (position) {
+      const lastPrice = bars[bars.length - 1].c;
+      const pnl = position.side === "long"
+        ? (lastPrice - position.entry) * position.qty
+        : (position.entry - lastPrice) * position.qty;
+      capital += pnl;
+      trades.push({ date: bars[bars.length - 1].t, side: position.side, entry: position.entry, exit: lastPrice, qty: position.qty, pnl: parseFloat(pnl.toFixed(2)), open: true });
+    }
+
+    // ── Stats ───────────────────────────────────────────────
+    const wins      = trades.filter(t => t.pnl > 0).length;
+    const losses    = trades.filter(t => t.pnl <= 0).length;
+    const total_pnl = trades.reduce((s, t) => s + t.pnl, 0);
+    const win_rate  = trades.length ? ((wins / trades.length) * 100).toFixed(1) : 0;
+
+    // Max drawdown
+    let peak = initial_capital, maxDrawdown = 0;
+    for (const pt of equity) {
+      if (pt.v > peak) peak = pt.v;
+      const dd = (peak - pt.v) / peak * 100;
+      if (dd > maxDrawdown) maxDrawdown = dd;
+    }
+
+    res.json({
+      symbol: symbol.toUpperCase(),
+      bars_total: bars.length,
+      trades_total: trades.length,
+      wins, losses,
+      win_rate: parseFloat(win_rate),
+      total_pnl: parseFloat(total_pnl.toFixed(2)),
+      total_pnl_pct: parseFloat(((capital - initial_capital) / initial_capital * 100).toFixed(2)),
+      max_drawdown: parseFloat(maxDrawdown.toFixed(2)),
+      initial_capital,
+      final_capital: parseFloat(capital.toFixed(2)),
+      equity,
+      trades: trades.slice(-50), // last 50 trades for table
+    });
+  } catch (err) {
+    console.error("Backtest error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Start server ──────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 Alpaca Dashboard corriendo en http://localhost:${PORT}`);
