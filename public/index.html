@@ -204,8 +204,9 @@
         <div class="metric-sub">equity</div>
       </div>
       <div class="card">
-        <div class="card-title">Cash disponible</div>
+        <div class="card-title">Buying Power</div>
         <div class="metric-val" id="m-cash"><span class="spin"></span></div>
+        <div class="metric-sub">poder de compra (2x margin)</div>
       </div>
       <div class="card">
         <div class="card-title">P&L del día</div>
@@ -276,7 +277,10 @@
     <!-- Trades history -->
     <div class="card" style="margin-bottom:20px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-        <div class="card-title" style="margin-bottom:0;">Historial de trades</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="card-title" style="margin-bottom:0;">Historial de trades</div>
+          <span id="trades-total" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+        </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <select id="trades-filter" onchange="filterTrades(this.value)" style="width:auto;padding:4px 8px;font-size:12px;">
             <option value="ALL">Todos los símbolos</option>
@@ -303,7 +307,7 @@
           </select>
         </div>
       </div>
-      <div style="overflow-x:auto;">
+      <div style="overflow-x:auto;overflow-y:auto;max-height:420px;">
         <table>
           <thead>
             <tr>
@@ -402,19 +406,54 @@
 
         <div class="cfg-item">
           <label class="cfg-label">Indicador técnico</label>
-          <select id="cfg-indicator">
+          <select id="cfg-indicator" onchange="onIndicatorChange()">
             <option value="sma">SMA — Simple Moving Average</option>
             <option value="ema">EMA — Exponential Moving Average</option>
             <option value="vwap">VWAP</option>
             <option value="bb">Bollinger Bands</option>
             <option value="rsi">RSI</option>
+            <option value="cross">Cruce de promedios (SMA/EMA)</option>
           </select>
         </div>
         <div class="cfg-item">
           <label class="cfg-label">Período</label>
           <div class="slider-row">
-            <input type="range" min="5" max="50" value="14" step="1" id="cfg-period" oninput="document.getElementById('cfg-period-val').textContent=this.value">
+            <input type="range" min="1" max="200" value="14" step="1" id="cfg-period" oninput="document.getElementById('cfg-period-val').textContent=this.value">
             <span class="slider-val" id="cfg-period-val">14</span>
+          </div>
+        </div>
+
+        <!-- Crossover strategy panel -->
+        <div class="cfg-item full" id="cross-panel" style="display:none;">
+          <label class="cfg-label">Configuración de cruce de promedios</label>
+          <div style="border:1px solid var(--border2);border-radius:var(--radius);padding:12px;background:var(--bg3);display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div class="cfg-label" style="margin-bottom:6px;">Promedio rápido</div>
+              <select id="cfg-cross-fast-type" style="margin-bottom:8px;">
+                <option value="SMA">SMA</option>
+                <option value="EMA">EMA</option>
+              </select>
+              <div class="cfg-label" style="margin-bottom:4px;">Período rápido</div>
+              <div class="slider-row">
+                <input type="range" min="1" max="200" value="9" step="1" id="cfg-cross-fast" oninput="document.getElementById('cfg-cross-fast-val').textContent=this.value">
+                <span class="slider-val" id="cfg-cross-fast-val">9</span>
+              </div>
+            </div>
+            <div>
+              <div class="cfg-label" style="margin-bottom:6px;">Promedio lento</div>
+              <select id="cfg-cross-slow-type" style="margin-bottom:8px;">
+                <option value="SMA">SMA</option>
+                <option value="EMA">EMA</option>
+              </select>
+              <div class="cfg-label" style="margin-bottom:4px;">Período lento</div>
+              <div class="slider-row">
+                <input type="range" min="1" max="200" value="21" step="1" id="cfg-cross-slow" oninput="document.getElementById('cfg-cross-slow-val').textContent=this.value">
+                <span class="slider-val" id="cfg-cross-slow-val">21</span>
+              </div>
+            </div>
+            <div style="grid-column:1/-1;font-size:11px;color:var(--text2);font-family:var(--mono);padding-top:4px;">
+              Compra cuando el promedio rápido cruza al alza el lento · Vende/corto cuando cruza a la baja
+            </div>
           </div>
         </div>
         <div class="cfg-item">
@@ -582,6 +621,22 @@ async function toggleBot() {
   } catch(e) { console.error('Error actualizando pausa:', e); }
 }
 
+// ── Indicator selector ───────────────────────────────────────
+function onIndicatorChange() {
+  const val = document.getElementById('cfg-indicator').value;
+  const crossPanel = document.getElementById('cross-panel');
+  const periodItem = document.getElementById('cfg-period').closest('.cfg-item');
+  if (val === 'cross') {
+    crossPanel.style.display = '';
+    periodItem.style.opacity = '0.35';
+    periodItem.style.pointerEvents = 'none';
+  } else {
+    crossPanel.style.display = 'none';
+    periodItem.style.opacity = '';
+    periodItem.style.pointerEvents = '';
+  }
+}
+
 // ── Config toggles ───────────────────────────────────────────
 function toggleTP() { document.getElementById('tp-panel').className = 'sub-panel' + (document.getElementById('tp-toggle').checked ? '' : ' disabled'); }
 function toggleSL() { document.getElementById('sl-panel').className = 'sub-panel' + (document.getElementById('sl-toggle').checked ? '' : ' disabled'); }
@@ -660,9 +715,10 @@ async function applyConfig() {
   btn.textContent = 'Aplicando...';
   btn.disabled = true;
 
+  const indicator = document.getElementById('cfg-indicator').value;
   const body = {
     watchlist: [...selected],
-    indicator: document.getElementById('cfg-indicator').value,
+    indicator,
     period: document.getElementById('cfg-period-val').textContent,
     timeframe: document.getElementById('cfg-timeframe').value,
     risk: document.getElementById('cfg-risk-val').textContent.replace('%',''),
@@ -673,6 +729,12 @@ async function applyConfig() {
     paused: !botActive,
     symbol_config: symbolConfig,
   };
+  if (indicator === 'cross') {
+    body.cross_fast_type  = document.getElementById('cfg-cross-fast-type').value;
+    body.cross_fast_period = parseInt(document.getElementById('cfg-cross-fast-val').textContent);
+    body.cross_slow_type  = document.getElementById('cfg-cross-slow-type').value;
+    body.cross_slow_period = parseInt(document.getElementById('cfg-cross-slow-val').textContent);
+  }
 
   try {
     const res = await fetch('/api/bot-config', {
@@ -735,6 +797,19 @@ async function loadBotConfig() {
     document.getElementById('sl-toggle').checked = cfg.sl_enabled;
     toggleTP(); toggleSL();
 
+    // Restore crossover config
+    if (cfg.cross_fast_type) document.getElementById('cfg-cross-fast-type').value = cfg.cross_fast_type;
+    if (cfg.cross_fast_period) {
+      document.getElementById('cfg-cross-fast').value = cfg.cross_fast_period;
+      document.getElementById('cfg-cross-fast-val').textContent = cfg.cross_fast_period;
+    }
+    if (cfg.cross_slow_type) document.getElementById('cfg-cross-slow-type').value = cfg.cross_slow_type;
+    if (cfg.cross_slow_period) {
+      document.getElementById('cfg-cross-slow').value = cfg.cross_slow_period;
+      document.getElementById('cfg-cross-slow-val').textContent = cfg.cross_slow_period;
+    }
+    onIndicatorChange();
+
     // Sync watchlist selection — solo si no hay selección guardada localmente
     if (cfg.watchlist?.length && !localStorage.getItem('selected_symbols')) {
       selected = new Set(cfg.watchlist);
@@ -766,7 +841,7 @@ async function loadAccount() {
   try {
     const d = await fetch('/api/account').then(r => r.json());
     document.getElementById('m-equity').textContent = '$' + parseFloat(d.equity).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-    document.getElementById('m-cash').textContent = '$' + parseFloat(d.cash).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('m-cash').textContent = '$' + parseFloat(d.buying_power).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
   } catch(e) { console.error('account', e); }
 }
 
@@ -874,9 +949,13 @@ async function loadOrders() {
 
 function filterTrades(symbol) {
   const tbody = document.getElementById('trades-body');
+  const totalEl = document.getElementById('trades-total');
   const filtered = symbol === 'ALL' ? allOrders : allOrders.filter(o => o.symbol === symbol);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayTrades = filtered.filter(o => o.submitted_at?.startsWith(todayStr) || o.filled_at?.startsWith(todayStr));
+  totalEl.textContent = todayTrades.length ? `${todayTrades.length} trades hoy` : '';
   if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6" class="no-data">Sin trades</td></tr>'; return; }
-  tbody.innerHTML = filtered.slice(0, 50).map(o => {
+  tbody.innerHTML = filtered.slice(0, 20).map(o => {
     const time = o.filled_at ? new Date(o.filled_at).toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit'}) : '—';
     return `<tr>
       <td>${time}</td>

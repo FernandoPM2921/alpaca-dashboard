@@ -309,7 +309,11 @@ let botConfig = {
   sl_enabled: false,
   sl_pct: 1,
   paused: false,
-  symbol_config: {}, // { "SPY": { long_short: true }, ... }
+  symbol_config: {},
+  cross_fast_type: "SMA",
+  cross_fast_period: 9,
+  cross_slow_type: "SMA",
+  cross_slow_period: 21,
 };
 
 // Get bot config (used by the bot to read settings)
@@ -320,17 +324,21 @@ app.get("/api/bot-config", (req, res) => {
 // Update bot config (called from dashboard)
 app.post("/api/bot-config", (req, res) => {
   const update = req.body;
-  if (update.watchlist)              botConfig.watchlist    = update.watchlist;
-  if (update.indicator)              botConfig.indicator    = update.indicator;
-  if (update.period)                 botConfig.period       = parseInt(update.period);
-  if (update.timeframe)              botConfig.timeframe    = update.timeframe;
-  if (update.risk !== undefined)     botConfig.risk         = parseFloat(update.risk);
-  if (update.tp_enabled !== undefined) botConfig.tp_enabled = update.tp_enabled;
-  if (update.tp_pct !== undefined)   botConfig.tp_pct       = parseFloat(update.tp_pct);
-  if (update.sl_enabled !== undefined) botConfig.sl_enabled = update.sl_enabled;
-  if (update.sl_pct !== undefined)   botConfig.sl_pct       = parseFloat(update.sl_pct);
-  if (update.paused !== undefined)   botConfig.paused        = update.paused;
-  if (update.symbol_config)          botConfig.symbol_config  = update.symbol_config;
+  if (update.watchlist)              botConfig.watchlist          = update.watchlist;
+  if (update.indicator)              botConfig.indicator          = update.indicator;
+  if (update.period)                 botConfig.period             = parseInt(update.period);
+  if (update.timeframe)              botConfig.timeframe          = update.timeframe;
+  if (update.risk !== undefined)     botConfig.risk               = parseFloat(update.risk);
+  if (update.tp_enabled !== undefined) botConfig.tp_enabled       = update.tp_enabled;
+  if (update.tp_pct !== undefined)   botConfig.tp_pct             = parseFloat(update.tp_pct);
+  if (update.sl_enabled !== undefined) botConfig.sl_enabled       = update.sl_enabled;
+  if (update.sl_pct !== undefined)   botConfig.sl_pct             = parseFloat(update.sl_pct);
+  if (update.paused !== undefined)   botConfig.paused             = update.paused;
+  if (update.symbol_config)          botConfig.symbol_config      = update.symbol_config;
+  if (update.cross_fast_type)        botConfig.cross_fast_type    = update.cross_fast_type;
+  if (update.cross_fast_period)      botConfig.cross_fast_period  = parseInt(update.cross_fast_period);
+  if (update.cross_slow_type)        botConfig.cross_slow_type    = update.cross_slow_type;
+  if (update.cross_slow_period)      botConfig.cross_slow_period  = parseInt(update.cross_slow_period);
 
   console.log("⚙️  Config actualizada:", JSON.stringify(botConfig));
   res.json({ success: true, config: botConfig });
