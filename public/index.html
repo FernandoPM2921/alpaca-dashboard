@@ -211,6 +211,7 @@
       <div class="card">
         <div class="card-title">P&L del día</div>
         <div class="metric-val" id="m-pnl"><span class="spin"></span></div>
+        <div class="metric-sub" id="m-pnl-pct"></div>
         <div class="metric-sub" id="m-trades">— trades</div>
       </div>
       <div class="card" style="cursor:pointer;" onclick="toggleWLDetail()" title="Ver detalle">
@@ -984,6 +985,25 @@ async function loadPnL() {
     const el = document.getElementById('m-pnl');
     el.textContent = (pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(2);
     el.className = 'metric-val ' + (pnl >= 0 ? 'pos' : 'neg');
+
+    // Calcular % del día usando equity actual
+    const pnlPctEl = document.getElementById('m-pnl-pct');
+    if (d.equity_start && d.equity_start > 0) {
+      const pct = (pnl / d.equity_start * 100).toFixed(2);
+      pnlPctEl.textContent = (pnl >= 0 ? '+' : '') + pct + '%';
+      pnlPctEl.style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+    } else {
+      // Fallback: usar equity actual del DOM si ya cargó
+      const equityEl = document.getElementById('m-equity');
+      const equityText = equityEl?.textContent?.replace(/[$,]/g, '');
+      const equity = parseFloat(equityText);
+      if (equity > 0) {
+        const pct = (pnl / (equity - pnl) * 100).toFixed(2);
+        pnlPctEl.textContent = (pnl >= 0 ? '+' : '') + pct + '%';
+        pnlPctEl.style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      }
+    }
+
     document.getElementById('m-trades').textContent = d.total_trades + ' trades';
     const wl = document.getElementById('m-wl');
     wl.textContent = d.wins + ' / ' + d.losses;
