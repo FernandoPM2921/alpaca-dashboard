@@ -8,6 +8,7 @@ import axios from "axios";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 
 dotenv.config();
 
@@ -298,6 +299,29 @@ app.get("/api/pnl", async (req, res) => {
 });
 
 // ── Bot Config Storage ────────────────────────────────────────
+const CONFIG_FILE = join(__dirname, "../bot-config.json");
+
+function loadConfigFromDisk() {
+  try {
+    if (existsSync(CONFIG_FILE)) {
+      const data = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+      console.log("📂 Config cargada desde disco");
+      return data;
+    }
+  } catch (e) {
+    console.log("⚠️  Error leyendo config desde disco, usando defaults:", e.message);
+  }
+  return null;
+}
+
+function saveConfigToDisk(config) {
+  try {
+    writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf8");
+  } catch (e) {
+    console.log("⚠️  Error guardando config en disco:", e.message);
+  }
+}
+
 let botConfig = {
   watchlist: ["AAPL","AMZN","GOOG","META","MSFT","AMD","NVDA","BAC","JPM","CAT","GE","VLO","XOM","CVS","TJX","TSLA","COST","WMT","SPY","QQQ"],
   indicator: "SMA",
@@ -315,6 +339,10 @@ let botConfig = {
   cross_slow_type: "SMA",
   cross_slow_period: 21,
 };
+
+// Cargar config guardada si existe
+const savedConfig = loadConfigFromDisk();
+if (savedConfig) botConfig = { ...botConfig, ...savedConfig };
 
 // Get bot config (used by the bot to read settings)
 app.get("/api/bot-config", (req, res) => {
@@ -341,6 +369,7 @@ app.post("/api/bot-config", (req, res) => {
   if (update.cross_slow_period)      botConfig.cross_slow_period  = parseInt(update.cross_slow_period);
 
   console.log("⚙️  Config actualizada:", JSON.stringify(botConfig));
+  saveConfigToDisk(botConfig);
   res.json({ success: true, config: botConfig });
 });
 
